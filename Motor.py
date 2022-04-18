@@ -8,14 +8,17 @@ import pigpio
 import sys
 import time
 
-class Motor:
-    def __init__(self):
-        # Define the motor pins.
-        MTR1_LEGA = 7
-        MTR1_LEGB = 8
+# Define the motor pins.
+MTR1_LEGA = 7
+MTR1_LEGB = 8
+MTR2_LEGA = 5
+MTR2_LEGB = 6
+    
 
-        MTR2_LEGA = 5
-        MTR2_LEGB = 6
+class Motor:
+    
+    def __init__(self):
+        
 
         # Prepare the GPIO connetion (to command the motors).
         print("Setting up the GPIO...")
@@ -70,24 +73,70 @@ class Motor:
             self.shutdown
 
         if leftdutycycle > 0:
-            self.io.set_PWM_frequency(MTR1_LEGA, int(leftdutycycle*255))
+            self.io.set_PWM_dutycycle(MTR1_LEGA, int(leftdutycycle*255))
+            self.io.set_PWM_dutycycle(MTR1_LEGB, 0)
         else:
-            self.io.set_PWM_frequency(MTR1_LEGB, -int(leftdutycycle*255))
+            self.io.set_PWM_dutycycle(MTR1_LEGA, 0)
+            self.io.set_PWM_dutycycle(MTR1_LEGB, -int(leftdutycycle*255))
 
         if rightdutycycle > 0:
-            self.io.set_PWM_frequency(MTR2_LEGA, int(rightdutycycle*255))
+            self.io.set_PWM_dutycycle(MTR2_LEGA, 0)
+            self.io.set_PWM_dutycycle(MTR2_LEGB, int(rightdutycycle*255))
         else:
-            self.io.set_PWM_frequency(MTR2_LEGB, -int(rightdutycycle*255))
+            self.io.set_PWM_dutycycle(MTR2_LEGA, -int(rightdutycycle*255))
+            self.io.set_PWM_dutycycle(MTR2_LEGB, 0)
 
+
+    
+    def setlinear(self, speed):
+        PWM = (speed + 0.153)/0.738
+        self.set(PWM, PWM)
+        
+        
+    def setspin(self, speed):
+        #set spin based on speed. Positive speed indicates clockwise rotation
+        
+        PWM = (abs(speed) + 153.0)/546.0
+        if speed > 0:
+            self.set(PWM, -PWM)
+        else:
+            self.set(-PWM, PWM)
 #
 #   Main
 #
 if __name__ == "__main__":
-    motors = Motors()
+    motors = Motor()
+    
     try:
-        motor.set(.5, .5)
-        motor.shutdown()
-
-
-    except  BaseException as ex:
+        print("now move")
+        
+        while 1:
+            motors.set(0.7, 0.7)
+            time.sleep(1)
+            
+            motors.setspin(90)
+            time.sleep(1)
+            
+            motors.set(0.7, 0.7)
+            time.sleep(1)
+            
+            motors.setspin(90)
+            time.sleep(1)
+            
+            motors.set(0.7, 0.7)
+            time.sleep(1)
+            
+            motors.setspin(90)
+            time.sleep(1)
+            
+            motors.set(0.7, 0.7)
+            time.sleep(1)
+            
+            motors.setspin(90)
+            time.sleep(1)
+    
+    except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
+    
+    motors.shutdown()
+
