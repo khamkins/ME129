@@ -101,6 +101,25 @@ class Motor:
             self.set(PWM, -PWM)
         else:
             self.set(-PWM, PWM)
+            
+            
+    def setvel(self, linear, spin):
+        PWM_fwd = (abs(linear) + 0.153)/0.738 + .2
+        PWM_spin = (abs(spin) + 153.0)/546.0 
+              
+        if linear >= 0 and spin >= 0 :
+            PWM_L = PWM_fwd + PWM_spin
+            PWM_R = PWM_fwd 
+            
+        if linear >= 0 and spin <= 0 :
+            PWM_L = PWM_fwd - PWM_spin
+            PWM_R = PWM_fwd + PWM_spin
+            
+        print(PWM_L, PWM_R)
+        motors.set(PWM_L, PWM_R)  
+        
+    
+    
 #
 #   Main
 #
@@ -109,31 +128,9 @@ if __name__ == "__main__":
     
     try:
         print("now move")
-        
-        while 1:
-            motors.set(0.7, 0.7)
-            time.sleep(1)
-            
-            motors.setspin(90)
-            time.sleep(1)
-            
-            motors.set(0.7, 0.7)
-            time.sleep(1)
-            
-            motors.setspin(90)
-            time.sleep(1)
-            
-            motors.set(0.7, 0.7)
-            time.sleep(1)
-            
-            motors.setspin(90)
-            time.sleep(1)
-            
-            motors.set(0.7, 0.7)
-            time.sleep(1)
-            
-            motors.setspin(90)
-            time.sleep(1)
+        t = 3
+        motors.setvel(3/2/t,360/t )
+        time.sleep(t*2)
     
     except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
