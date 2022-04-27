@@ -160,7 +160,7 @@ class Motor:
         vel = 0
         t = 0
         while self.ircheck() == 0 :
-            if t == 1000:
+            if t == 5000:
                 degree = degree -.5
                 vel = vel + 0.05
                 t = 0
