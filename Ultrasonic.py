@@ -16,6 +16,16 @@ MTR1_LEGB = 8
 MTR2_LEGA = 5
 MTR2_LEGB = 6
 
+#define Ultrasonic codes
+CHANNEL_TRIGGER_1 = 33
+CHANNEL_ECHO_1 = 36
+
+CHANNEL_TRIGGER_2 = 35
+CHANNEL_ECHO_2 = 38
+
+CHANNEL_TRIGGER_3 = 37
+CHANNEL_ECHO_3 = 40
+
 # define sensors pins
 IR_LEFT = 18
 IR_MIDDLE = 15
@@ -71,7 +81,26 @@ class Intersection:
                 HEADING[self.headingToTarget]))
     
     
-
+class Ultrasonic:
+    
+    def __init__(self):
+        self.io = pigpio.pi()
+        if not self.io.connected:
+            print("Unable to connection to pigpio daemon!")
+            sys.exit(0)
+        # Set up the two pins as output/input.
+        io.set_mode(CHANNEL_TRIGGER_1, pigpio.OUTPUT)
+        io.set_mode(CHANNEL_ECHO_1, pigpio.INPUT)
+        io.set_mode(CHANNEL_TRIGGER_2, pigpio.OUTPUT)
+        io.set_mode(CHANNEL_ECHO_2, pigpio.INPUT)
+        io.set_mode(CHANNEL_TRIGGER_3, pigpio.OUTPUT)
+        io.set_mode(CHANNEL_ECHO_3, pigpio.INPUT)
+        
+        # Set up the interrupt handlers or callbacks.
+        cbrise = io.callback(CHANNEL_ECHO_1, pigpio.RISING_EDGE, rising)
+        cbfall = io.callback(CHANNEL_ECHO_1, pigpio.RISING_EDGE, falling)
+        
+    def rising(gpio, level, tick):
 
 class Motor:
     
@@ -514,6 +543,7 @@ if __name__ == "__main__":
         print("Ending due to exception: %s" % repr(ex))
     
     motors.shutdown()
+
 
 
 
