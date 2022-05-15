@@ -272,7 +272,7 @@ class Motor:
             elif ir_curr == 7 :
                 #drive straight to get axels over intersection
                 self.setvel(0.2, 0)
-                time.sleep(0.45)
+                time.sleep(0.43)
                 self.setvel(0,0)
                 break
             #update past IR status
@@ -294,6 +294,35 @@ class Motor:
             new_dir=3
             self.setvel(0, 360)
             time.sleep(.38)
+        
+        self.setvel(0, 0)
+        time.sleep(1)
+        #update heading
+        heading = (heading + new_dir) % 4
+    
+    def turnto(self, dir):
+        global heading
+        new_dir = dir
+        if dir == 1 or dir == -3:
+            new_dir =1
+            self.setvel(0, -360)
+            time.sleep(.30)
+            while self.ircheck() != 2:
+                self.setvel(0,-200)
+        if dir == 2 or dir == -2:
+            new_dir = 2
+            self.setvel(0, -360)
+            time.sleep(.70)
+            while self.ircheck() != 2:
+                self.setvel(0,-200)
+        
+        if dir == 3 or dir == -1:
+            new_dir=3
+            self.setvel(0, 360)
+            time.sleep(.30)
+            while self.ircheck() != 2:
+                self.setvel(0, 200)
+        
         
         self.setvel(0, 0)
         time.sleep(1)
@@ -324,6 +353,9 @@ class Motor:
         results = [False, False, False, False]
         self.setvel(0, 0)
         time.sleep(1.0)
+        
+        results[(heading + 2) % 4] = True
+        
         self.turn(1)
         if self.ircheck() != 0:
             while self.ircheck() != 2:
@@ -363,7 +395,6 @@ class Motor:
             results[heading] = True
         
         self.turn(1)
-        results[(heading + 2) % 4] = True
             
         return results
     
@@ -415,7 +446,7 @@ class Motor:
         while long != targetlong or lat != targetlat :
             inter = intersection(long, lat)
             print(repr(inter))
-            self.turn(inter.headingToTarget - heading)
+            self.turnto(inter.headingToTarget - heading)
             self.drive()
             time.sleep(0.5)
             [long, lat] = shift(long, lat, heading)
@@ -459,7 +490,6 @@ if __name__ == "__main__":
                 searching = False
             
             motors.drive()
-            
             [long, lat] = shift(long, lat, heading)
             if intersection(long, lat) == None:
                 inter = Intersection(long, lat)
@@ -476,14 +506,18 @@ if __name__ == "__main__":
                 lastintersection.streets[heading] = CONNECTED
                 inter.streets[(heading+2)%4] = CONNECTED
                 inter.headingToTarget = (heading+2)%4
+#                 lastintersection.streets[(heading+1)%4] = CONNECTED
+#                 inter.streets[(heading+3)%4] = CONNECTED
+#                 inter.headingToTarget = (heading+3)%4
+#                 
                 turnstaken.append(inter.headingToTarget)
             streetind = []
             streetcnct = []
             for i in range(len(inter.streets)):
-                if inter.streets[i] == UNEXPLORED:
-                    streetind.append(i)
-                elif inter.streets[i] == CONNECTED:
-                    streetcnct.append(i)
+                if inter.streets[(heading+i)%4] == UNEXPLORED:
+                    streetind.append((heading+i)%4)
+                elif inter.streets[(heading+i)%4] == CONNECTED:
+                    streetcnct.append((heading+i)%4)
             if len(streetind) == 0:
                 #check for any unexplored streets on the map
                 tar = motors.unexplored()
@@ -491,21 +525,21 @@ if __name__ == "__main__":
                     motors.toTarget(tar.long, tar.lat)
                     i_unex = tar.streets.index(UNEXPLORED)
                     inter = tar
-                    motors.turn(i_unex - heading)
+                    motors.turnto(i_unex - heading)
                     
                 else:
                     motors.setvel(0,0)
-                    lo = input("enter target long: ")
-                    la = input("enter target lat: ")
+                    lo = int(input("enter target long: "))
+                    la = int(input("enter target lat: "))
                     if intersection(lo, la) == None:
                         raise Exception("No intersections at (%2d,%2d)" %(lo, la))
                     
-                    motors.toTarget(int(lo), int(la))
+                    motors.toTarget(lo, la)
                     #motors.goHome()
                     motors.shutdown()
                                 
             else:
-                motors.turn(streetind[0]-heading)
+                motors.turnto(streetind[0]-heading)
             print(repr(inter))
             lastintersection = inter
             

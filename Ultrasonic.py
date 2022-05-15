@@ -9,6 +9,7 @@ import pigpio
 import sys
 import time
 import random
+import threading
 
 # Define the motor pins.
 MTR1_LEGA = 7
@@ -85,6 +86,8 @@ class Ultrasonic:
     
     def __init__(self):
         self.io = pigpio.pi()
+        done = threading.Event()
+        
         if not self.io.connected:
             print("Unable to connection to pigpio daemon!")
             sys.exit(0)
@@ -101,6 +104,20 @@ class Ultrasonic:
         cbfall = io.callback(CHANNEL_ECHO_1, pigpio.RISING_EDGE, falling)
         
     def rising(gpio, level, tick):
+        global high
+        high = tick
+        
+    def falling(gpio, level, tick):
+        global low
+        low = tick - high
+        done.set()
+        
+    def read_distance():
+        global low
+        done.clear()
+        self.io.gpio_trigger(CHANNEL_TRIGGER_1, 50, 1)
+        if done.wait(timeout=5):
+            return low*10^-6*343/2
 
 class Motor:
     
@@ -478,6 +495,7 @@ def intersection(long, lat):
 #
 if __name__ == "__main__":
     motors = Motor()
+    sensor = Ultrasonic()
     searching = True
     try:
         ir_old = motors.ircheck()
@@ -486,6 +504,7 @@ if __name__ == "__main__":
                 motors.lost(1)
             elif ir_old != 0:
                 searching = False
+            print(sensor.read_distance())
             
             motors.drive()
             
