@@ -523,66 +523,66 @@ if __name__ == "__main__":
     try:
         while True:
             print(cur_dist)
-        # ir_old = motors.ircheck()
-        # while True:
-        #     if searching and ir_old == 0:
-        #         motors.lost(1)
-        #     elif ir_old != 0:
-        #         searching = False
-        #     print(sensor.read_distance())
-        #
-        #     motors.drive()
-        #
-        #     [long, lat] = shift(long, lat, heading)
-        #     if intersection(long, lat) == None:
-        #         inter = Intersection(long, lat)
-        #         temp = motors.sample()
-        #         for i in range(4):
-        #             if temp[i] == True:
-        #                 inter.streets[i] = UNEXPLORED
-        #             else:
-        #                 inter.streets[i] = NOSTREET
-        #     else:
-        #         inter = intersection(long, lat)
-        #
-        #     if lastintersection != None:
-        #         lastintersection.streets[heading] = CONNECTED
-        #         inter.streets[(heading + 2) % 4] = CONNECTED
-        #         inter.headingToTarget = (heading + 2) % 4
-        #         turnstaken.append(inter.headingToTarget)
-        #     streetind = []
-        #     streetcnct = []
-        #     for i in range(len(inter.streets)):
-        #         if inter.streets[i] == UNEXPLORED:
-        #             streetind.append(i)
-        #         elif inter.streets[i] == CONNECTED:
-        #             streetcnct.append(i)
-        #     if len(streetind) == 0:
-        #         # check for any unexplored streets on the map
-        #         tar = motors.unexplored()
-        #         if tar != None:
-        #             motors.toTarget(tar.long, tar.lat)
-        #             i_unex = tar.streets.index(UNEXPLORED)
-        #             inter = tar
-        #             motors.turn(i_unex - heading)
-        #
-        #         else:
-        #             motors.setvel(0, 0)
-        #             lo = input("enter target long: ")
-        #             la = input("enter target lat: ")
-        #             if intersection(lo, la) == None:
-        #                 raise Exception("No intersections at (%2d,%2d)" % (lo, la))
-        #
-        #             motors.toTarget(int(lo), int(la))
-        #             # motors.goHome()
-        #             motors.shutdown()
-        #
-        #     else:
-        #         motors.turn(streetind[0] - heading)
-        #     print(repr(inter))
-        #     lastintersection = inter
+        ir_old = motors.ircheck()
+        while True:
+            if searching and ir_old == 0:
+                motors.lost(1)
+            elif ir_old != 0:
+                searching = False
+            print(sensor.read_distance())
 
+            motors.drive()
 
+            [long, lat] = shift(long, lat, heading)
+            if intersection(long, lat) == None:
+                inter = Intersection(long, lat)
+                temp = motors.sample()
+                for i in range(4):
+                    if temp[i] == True:
+                        inter.streets[i] = UNEXPLORED
+                    else:
+                        inter.streets[i] = NOSTREET
+            else:
+                inter = intersection(long, lat)
+
+            if lastintersection != None:
+                lastintersection.streets[heading] = CONNECTED
+                inter.streets[(heading + 2) % 4] = CONNECTED
+                inter.headingToTarget = (heading + 2) % 4
+                turnstaken.append(inter.headingToTarget)
+            streetind = []
+            streetcnct = []
+            for i in range(len(inter.streets)):
+                if inter.streets[i] == UNEXPLORED:
+                    streetind.append(i)
+                elif inter.streets[i] == CONNECTED:
+                    streetcnct.append(i)
+            if len(streetind) == 0:
+                # check for any unexplored streets on the map
+                tar = motors.unexplored()
+                if tar != None:
+                    motors.toTarget(tar.long, tar.lat)
+                    i_unex = tar.streets.index(UNEXPLORED)
+                    inter = tar
+                    motors.turn(i_unex - heading)
+
+                else:
+                    motors.setvel(0, 0)
+                    lo = input("enter target long: ")
+                    la = input("enter target lat: ")
+                    if intersection(lo, la) == None:
+                        raise Exception("No intersections at (%2d,%2d)" % (lo, la))
+
+                    motors.toTarget(int(lo), int(la))
+                    # motors.goHome()
+                    motors.shutdown()
+
+            else:
+                motors.turn(streetind[0] - heading)
+            print(repr(inter))
+            lastintersection = inter
+
+# all
     except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
 
