@@ -10,6 +10,8 @@ import sys
 import time
 import random
 import traceback
+import statistics
+import threading
 
 # Define the motor pins.
 MTR1_LEGA = 7
@@ -18,14 +20,14 @@ MTR2_LEGA = 5
 MTR2_LEGB = 6
 
 # define Ultrasonic codes
-CHANNEL_TRIGGER_1 = 33
-CHANNEL_ECHO_1 = 36
+CHANNEL_TRIGGER_1 = 13
+CHANNEL_ECHO_1 = 16
 
-CHANNEL_TRIGGER_2 = 35
-CHANNEL_ECHO_2 = 38
+CHANNEL_TRIGGER_2 = 19
+CHANNEL_ECHO_2 = 20
 
-CHANNEL_TRIGGER_3 = 37
-CHANNEL_ECHO_3 = 40
+CHANNEL_TRIGGER_3 = 26
+CHANNEL_ECHO_3 = 21
 
 # define sensors pins
 IR_LEFT = 18
@@ -58,6 +60,7 @@ last_trigger = 0
 rise_ticks = 0
 dtick = 0
 
+cur_dist = [0,0,0]
 
 class Intersection:
     # Initialize - create new intersection at (long, let)
@@ -88,21 +91,23 @@ class Intersection:
 
 class Ultrasonic:
 
-    def __init__(self, trig, echo):
-        self.io = pigpio.pi()
-        if not self.io.connected:
-            print("Unable to connection to pigpio daemon!")
-            sys.exit(0)
+    def __init__(self, io, trig, echo, sens_dir):
+#         if not self.io.connected:
+#             print("Unable to connection to pigpio daemon!")
+#             sys.exit(0)
 
         # Set up the two pins as output/input.
-        self.io.set_mode(trig, pigpio.OUTPUT)
-        self.io.set_mode(echo, pigpio.INPUT)
-
+        io.set_mode(trig, pigpio.OUTPUT)
+        io.set_mode(echo, pigpio.INPUT)
+        self.io = io
         # Set up the callbacks.
-        cbrise = self.io.callback(echo, pigpio.RISING_EDGE, self.rising)
-        cbfall = self.io.callback(echo, pigpio.RISING_EDGE, self.falling)
-
-        curr_distance = 0
+        self.cbrise = io.callback(echo, pigpio.RISING_EDGE, self.rising)
+        self.cbfall = io.callback(echo, pigpio.FALLING_EDGE, self.falling)
+        
+        self.trig = trig
+        self.echo = echo
+        self.curr_distance = 0
+        self.sens_dir = sens_dir
 
     def rising(self, gpio, level, tick):
         global rise_ticks
@@ -110,19 +115,22 @@ class Ultrasonic:
 
     def falling(self, gpio, level, tick):
         global dtick
+        global cur_dist
         dtick = tick - rise_ticks
-        if dtick < 0: dtick += (1 << 32)
-        curr_distance = 343 / 2 * dtick * 10 ^ -6
-
+        #if dtick < 0:
+         #   dtick += (1 << 32)
+        self.curr_distance = 343.0 / 2.0 * dtick * 10.0**(-4.0)
+        cur_dist[self.sens_dir-1] = self.curr_distance
+        
     def trigger(self):
         global last_trigger
-
-        self.io.write(trig, 1)
+        
+        self.io.write(self.trig, 1)
         time.sleep(0.000010)
-        self.io.write(trig, 0)
-
+        self.io.write(self.trig, 0)
         last_trigger = time.time
-        return curr_distance
+        
+        
 
     def shutdown(self):
         self.cbrise.cancel()
@@ -485,17 +493,36 @@ def intersection(long, lat):
         raise Exception("Multiple intersections at (%2d,%2d)" % (long, lat))
     return list[0]
 
+def stopcontinual():
+    stopflag = True
+    
+def runcontinual(ultra1, ultra2, ultra3):
+    stopflag = False
+    while not stopflag:
+        ultra1.trigger()
+        ultra2.trigger()
+        ultra3.trigger()
+        time.sleep(0.8 + 0.4 * random.random())
 
 #
 #   Main
 #
 if __name__ == "__main__":
     motors = Motor()
-    sensor1 = Ultrasonic(CHANNEL_TRIGGER_1, CHANNEL_ECHO_1)
+    io = pigpio.pi()
+        
+    ultra1 = Ultrasonic(io, CHANNEL_TRIGGER_1, CHANNEL_ECHO_1, 1)
+    ultra2 = Ultrasonic(io, CHANNEL_TRIGGER_2, CHANNEL_ECHO_2, 2)
+    ultra3 = Ultrasonic(io, CHANNEL_TRIGGER_3, CHANNEL_ECHO_3, 3)
+    
     searching = True
+    
+    thread = threading.Thread(target=runcontinual,args=(ultra1, ultra2, ultra3))
+    thread.start()
+    
     try:
-        dist = sensor1.trigger()
-        print(dist)
+        while True:
+            print(cur_dist)
         # ir_old = motors.ircheck()
         # while True:
         #     if searching and ir_old == 0:
@@ -559,5 +586,10 @@ if __name__ == "__main__":
     except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
 
+    stopcontinual()
+    thread.join()
+    
     motors.shutdown()
-    sensor1.shutdown()
+    ultra1.shutdown()
+    ultra2.shutdown()
+    ultra3.shutdown()
