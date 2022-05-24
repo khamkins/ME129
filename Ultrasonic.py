@@ -59,6 +59,7 @@ heading = 0  # Current heading
 last_trigger = 0
 rise_ticks = 0
 dtick = 0
+stopflag = False
 
 cur_dist = [0,0,0]
 
@@ -124,9 +125,10 @@ class Ultrasonic:
         
     def trigger(self):
         global last_trigger
-        
+        self.io.write(self.trig, 0)
+        time.sleep(0.000005)
         self.io.write(self.trig, 1)
-        time.sleep(0.000010)
+        time.sleep(0.000020)
         self.io.write(self.trig, 0)
         last_trigger = time.time
         
@@ -139,13 +141,13 @@ class Ultrasonic:
 
 class Motor:
 
-    def __init__(self):
+    def __init__(self, io):
 
         # Prepare the GPIO connetion (to command the motors).
         print("Setting up the GPIO...")
 
         # Initialize the connection to the pigpio daemon (GPIO interface).
-        self.io = pigpio.pi()
+        self.io = io
         if not self.io.connected:
             print("Unable to connection to pigpio daemon!")
             sys.exit(0)
@@ -246,19 +248,19 @@ class Motor:
             PWM_spin = 0
 
         if linear >= 0 and spin >= 0:
-            PWM_L = PWM_fwd + PWM_spin
+            PWM_L = PWM_fwd + PWM_spin + .05
             PWM_R = PWM_fwd - PWM_spin
 
         if linear >= 0 and spin <= 0:
-            PWM_L = PWM_fwd - PWM_spin
+            PWM_L = PWM_fwd - PWM_spin + .05
             PWM_R = PWM_fwd + PWM_spin
 
         if linear < 0 and spin >= 0:
-            PWM_L = -PWM_fwd + PWM_spin
+            PWM_L = -PWM_fwd + PWM_spin - .05
             PWM_R = -PWM_fwd - PWM_spin
 
         if linear < 0 and spin <= 0:
-            PWM_L = -PWM_fwd - PWM_spin
+            PWM_L = -PWM_fwd - PWM_spin - .05
             PWM_R = -PWM_fwd + PWM_spin
 
         # print(PWM_L, PWM_R)
@@ -494,102 +496,88 @@ def intersection(long, lat):
     return list[0]
 
 def stopcontinual():
+    global stopflag
     stopflag = True
     
 def runcontinual(ultra1, ultra2, ultra3):
+    global stopflag
+    
     stopflag = False
+    
     while not stopflag:
         ultra1.trigger()
         ultra2.trigger()
         ultra3.trigger()
-        time.sleep(0.8 + 0.4 * random.random())
+        #time.sleep(2)
+        time.sleep(0.08 + 0.04 * random.random())
+     
 
 #
 #   Main
 #
 if __name__ == "__main__":
-    motors = Motor()
+    
     io = pigpio.pi()
+    motors = Motor(io)
         
     ultra1 = Ultrasonic(io, CHANNEL_TRIGGER_1, CHANNEL_ECHO_1, 1)
     ultra2 = Ultrasonic(io, CHANNEL_TRIGGER_2, CHANNEL_ECHO_2, 2)
     ultra3 = Ultrasonic(io, CHANNEL_TRIGGER_3, CHANNEL_ECHO_3, 3)
-    
-    searching = True
+
     
     thread = threading.Thread(target=runcontinual,args=(ultra1, ultra2, ultra3))
     thread.start()
     
     try:
-        while True:
-            print(cur_dist)
+        lst = []
+        i = 0
+        avg_dist = cur_dist[1]
         ir_old = motors.ircheck()
+            
+        
         while True:
-            if searching and ir_old == 0:
-                motors.lost(1)
-            elif ir_old != 0:
-                searching = False
-            print(sensor.read_distance())
-
-            motors.drive()
-
-            [long, lat] = shift(long, lat, heading)
-            if intersection(long, lat) == None:
-                inter = Intersection(long, lat)
-                temp = motors.sample()
-                for i in range(4):
-                    if temp[i] == True:
-                        inter.streets[i] = UNEXPLORED
-                    else:
-                        inter.streets[i] = NOSTREET
-            else:
-                inter = intersection(long, lat)
-
-            if lastintersection != None:
-                lastintersection.streets[heading] = CONNECTED
-                inter.streets[(heading + 2) % 4] = CONNECTED
-                inter.headingToTarget = (heading + 2) % 4
-                turnstaken.append(inter.headingToTarget)
-            streetind = []
-            streetcnct = []
-            for i in range(len(inter.streets)):
-                if inter.streets[i] == UNEXPLORED:
-                    streetind.append(i)
-                elif inter.streets[i] == CONNECTED:
-                    streetcnct.append(i)
-            if len(streetind) == 0:
-                # check for any unexplored streets on the map
-                tar = motors.unexplored()
-                if tar != None:
-                    motors.toTarget(tar.long, tar.lat)
-                    i_unex = tar.streets.index(UNEXPLORED)
-                    inter = tar
-                    motors.turn(i_unex - heading)
-
-                else:
-                    motors.setvel(0, 0)
-                    lo = input("enter target long: ")
-                    la = input("enter target lat: ")
-                    if intersection(lo, la) == None:
-                        raise Exception("No intersections at (%2d,%2d)" % (lo, la))
-
-                    motors.toTarget(int(lo), int(la))
-                    # motors.goHome()
-                    motors.shutdown()
-
-            else:
-                motors.turn(streetind[0] - heading)
-            print(repr(inter))
-            lastintersection = inter
-
-# all
+            
+            print(cur_dist)
+            
+            d = cur_dist[2]
+            d_des = 20
+            e = d - d_des
+            k = 0.015
+            u = -k*e
+            PWMleft = max(0.5, min(0.9, 0.7 - u))
+            PWMright = max(0.5, min(0.9, 0.7+u)) + 0.025
+            print(PWMleft)
+            print(PWMright)
+            motors.set(PWMleft, PWMright)
+            
+            
+#             if cur_dist[1] <= 20:
+#                 print('too close')
+#                 motors.setvel(-0.2,0)   
+#             elif cur_dist[0] <= 20 and cur_dist[2] > 20:
+#                 motors.setvel(0.2, 180)
+#             elif cur_dist[0] > 20 and cur_dist[2] <= 20:
+#                 motors.setvel(0.2, -180)
+#             elif cur_dist[0] <= 20 and cur_dist[2] <= 20:
+#                 motors.setvel(0.2, 0)
+#                 
+#             else:
+#                 print('go')
+#                 motors.setvel(0.2, 0)
+        
+            
+    
     except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
 
+    
+    
     stopcontinual()
     thread.join()
-    
+
+    print('motor shutdown')
     motors.shutdown()
+
     ultra1.shutdown()
     ultra2.shutdown()
     ultra3.shutdown()
