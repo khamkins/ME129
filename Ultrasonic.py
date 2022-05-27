@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # 
 #   Ultrasonic.py adds an ultrasonic class
 #
@@ -59,7 +59,12 @@ heading = 0  # Current heading
 last_trigger = 0
 rise_ticks = 0
 dtick = 0
-stopflag = False
+triggering_stopflag = False
+driving_stopflag = False
+
+pausedriving = False
+exploreflag = True
+
 
 cur_dist = [0,0,0]
 
@@ -349,7 +354,38 @@ class Motor:
         time.sleep(1)
         # update heading
         heading = (heading + new_dir) % 4
-
+    
+    
+    def turnto(self, dir):
+        global heading
+        new_dir = dir
+        if dir == 1 or dir == -3:
+            new_dir =1
+            self.setvel(0, -360)
+            time.sleep(.30)
+            while self.ircheck() != 2:
+                self.setvel(0,-200)
+        if dir == 2 or dir == -2:
+            new_dir = 2
+            self.setvel(0, -360)
+            time.sleep(.70)
+            while self.ircheck() != 2:
+                self.setvel(0,-200)
+        
+        if dir == 3 or dir == -1:
+            new_dir=3
+            self.setvel(0, 360)
+            time.sleep(.30)
+            while self.ircheck() != 2:
+                self.setvel(0, 200)
+        
+        
+        self.setvel(0, 0)
+        time.sleep(1)
+        #update heading
+        heading = (heading + new_dir) % 4
+        
+        
     def goHome(self):
         global long
         global lat
@@ -495,22 +531,115 @@ def intersection(long, lat):
         raise Exception("Multiple intersections at (%2d,%2d)" % (long, lat))
     return list[0]
 
-def stopcontinual():
-    global stopflag
-    stopflag = True
+def triggering_stop():
+    global trigger_stopflag
+    trigger_stopflag = True
     
-def runcontinual(ultra1, ultra2, ultra3):
-    global stopflag
+def triggering_loop(ultra1, ultra2, ultra3):
+    global trigger_stopflag
     
-    stopflag = False
+    trigger_stopflag = False
     
-    while not stopflag:
+    while not trigger_stopflag:
         ultra1.trigger()
         ultra2.trigger()
         ultra3.trigger()
         #time.sleep(2)
         time.sleep(0.08 + 0.04 * random.random())
      
+#driving thread
+def driving_stop():
+    global driving_stopflag
+    driving_stopflag = True
+
+def driving_loop(motors):
+    global exploreflag
+    global pausedriving
+    global driving_stopflag
+    global long, lat, lastintersection, turnstaken
+    driving_stopflag = False
+    while not driving_stopflag:
+        if pausedriving:
+            continue
+        ir_old = motors.ircheck()    
+        if exploreflag:
+            motors.drive()
+            [long, lat] = shift(long, lat, heading)
+            if intersection(long, lat) == None:
+                inter = Intersection(long, lat)
+                temp = motors.sample()
+                for i in range(4):
+                    if temp[i] == True:
+                        inter.streets[i] = UNEXPLORED
+                    else:
+                        inter.streets[i] = NOSTREET                   
+            else:
+                inter = intersection(long, lat)
+                
+            if lastintersection != None:
+                lastintersection.streets[heading] = CONNECTED
+                inter.streets[(heading+2)%4] = CONNECTED
+                inter.headingToTarget = (heading+2)%4
+                turnstaken.append(inter.headingToTarget)
+            streetind = []
+            streetcnct = []
+            for i in range(len(inter.streets)):
+                if inter.streets[(heading+i)%4] == UNEXPLORED:
+                    streetind.append((heading+i)%4)
+                elif inter.streets[(heading+i)%4] == CONNECTED:
+                    streetcnct.append((heading+i)%4)
+            if len(streetind) == 0:
+                #check for any unexplored streets on the map
+                tar = motors.unexplored()
+                if tar != None:
+                    motors.toTarget(tar.long, tar.lat)
+                    i_unex = tar.streets.index(UNEXPLORED)
+                    inter = tar
+                    motors.turnto(i_unex - heading)
+                    
+                else:
+                    exploreflag = False
+            else:
+                motors.turnto(streetind[0]-heading)
+            print(repr(inter))
+            lastintersection = inter
+            
+        if not exploreflag:
+            motors.setvel(0,0)
+            lo = int(input("enter target long: "))
+            la = int(input("enter target lat: "))
+            if intersection(lo, la) == None:
+                raise Exception("No intersections at (%2d,%2d)" %(lo, la))
+            
+            motors.toTarget(lo, la)
+    
+def userinput():     
+    global exploreflag
+    global pausedriving
+    while True:
+        # Grab a command
+        command = input('Command ? ')
+        # Compare against possible commands.
+        if (command == 'pause'):
+            print("Pausing at the next intersection")
+            pausedriving = True
+        elif (command == 'explore'):
+            print("Exploring without a target")
+            exploreflag = True
+            pausedriving = False
+        elif (command == 'goto'):
+            print("Driving to a target")
+            exploreflag = False
+            pausedriving = False
+       # elif (command == 'print'):
+        #    print(map)
+            #... and/or useful debug values?
+        elif (command == 'quit'):
+            print("Quitting...")
+            break
+        else:
+            print("Unknown command '%s'" % command)
+
 
 #
 #   Main
@@ -525,31 +654,36 @@ if __name__ == "__main__":
     ultra3 = Ultrasonic(io, CHANNEL_TRIGGER_3, CHANNEL_ECHO_3, 3)
 
     
-    thread = threading.Thread(target=runcontinual,args=(ultra1, ultra2, ultra3))
-    thread.start()
+    triggering_thread = threading.Thread(target=triggering_loop,args=(ultra1, ultra2, ultra3))
+    triggering_thread.start()
+    #driving_thread = threading.Thread(target = driving_loop, args = (motors,))
+    #driving_thread.start()
     
     try:
-        lst = []
-        i = 0
-        avg_dist = cur_dist[1]
-        ir_old = motors.ircheck()
-            
         
-        while True:
-            
-            print(cur_dist)
-            
-            d = cur_dist[2]
-            d_des = 20
-            e = d - d_des
-            k = 0.015
-            u = -k*e
-            PWMleft = max(0.5, min(0.9, 0.7 - u))
-            PWMright = max(0.5, min(0.9, 0.7+u)) + 0.025
-            print(PWMleft)
-            print(PWMright)
-            motors.set(PWMleft, PWMright)
-            
+        #userinput()
+        driving_loop(motors)
+#         lst = []
+#         i = 0
+#         avg_dist = cur_dist[1]
+#         ir_old = motors.ircheck()
+#             
+#         
+#         while True:
+#             
+#             print(cur_dist)
+#             
+#             d = cur_dist[2]
+#             d_des = 20
+#             e = d - d_des
+#             k = 0.015
+#             u = -k*e
+#             PWMleft = max(0.5, min(0.9, 0.7 - u))
+#             PWMright = max(0.5, min(0.9, 0.7+u)) + 0.025
+#             print(PWMleft)
+#             print(PWMright)
+#             motors.set(PWMleft, PWMright)
+#             
             
 #             if cur_dist[1] <= 20:
 #                 print('too close')
@@ -569,12 +703,15 @@ if __name__ == "__main__":
     
     except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
-
+        traceback.print_exc()
     
     
-    stopcontinual()
-    thread.join()
-
+    triggering_stop()
+    triggering_thread.join()
+    
+   # driving_stop()
+   # driving_thread.join()
+    
     print('motor shutdown')
     motors.shutdown()
 
